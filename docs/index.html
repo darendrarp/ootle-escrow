@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ootle Escrow — milestone escrow for freelance work on Tari Ootle</title>
+<meta name="description" content="Client funds are locked in a vault and released milestone by milestone as work is approved. Arbiter disputes, expiry refunds, no custodian. Tari November Build Contest: MVP.">
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel2: #1e222c; --line: #2a2f3c;
+    --text: #e8eaf0; --muted: #9aa3b2; --accent: #e8b44a; --accent2: #6fcf97;
+    --danger: #e26d6d; --info: #6ea8e2; --violet: #b28de8;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); line-height: 1.5; }
+  a { color: var(--accent); }
+  header { border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 10; }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 16px; }
+  .topbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 12px 0; }
+  .logo { font-size: 20px; font-weight: 800; letter-spacing: -0.3px; }
+  .logo span { color: var(--accent); }
+  .badge { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; padding: 3px 8px; border-radius: 999px; background: #3a2f10; color: var(--accent); border: 1px solid #6b5518; }
+  .spacer { flex: 1; }
+  .epochbox { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+  .epochbox b { color: var(--text); font-variant-numeric: tabular-nums; }
+  button { cursor: pointer; border: 1px solid var(--line); background: var(--panel2); color: var(--text); border-radius: 8px; padding: 7px 12px; font-size: 13px; }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: #171204; border-color: var(--accent); font-weight: 700; }
+  button.danger { border-color: #6b2f2f; color: #f0a3a3; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  nav { display: flex; gap: 4px; padding: 0 0 10px; flex-wrap: wrap; }
+  nav button { border: none; background: transparent; color: var(--muted); font-weight: 600; }
+  nav button.active { color: var(--text); background: var(--panel2); }
+  main { padding: 20px 0 60px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin-bottom: 16px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } }
+  .roles { display: flex; gap: 8px; flex-wrap: wrap; }
+  .role { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; cursor: pointer; flex: 1; min-width: 150px; background: var(--panel2); }
+  .role.active { border-color: var(--accent); outline: 1px solid var(--accent); }
+  .role b { display: block; }
+  .role small { color: var(--muted); }
+  .role .key { font-family: monospace; font-size: 11px; color: var(--muted); }
+  .dealrow { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
+  .dealrow:last-child { border-bottom: none; }
+  .dealrow b { font-size: 16px; }
+  .pill { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line); }
+  .pill.pending { color: #d8c27a; border-color: #6b5518; }
+  .pill.delivered { color: var(--info); border-color: #2f4a6b; }
+  .pill.disputed { color: var(--danger); border-color: #6b2f2f; }
+  .pill.released { color: var(--accent2); border-color: #2f6b45; }
+  .pill.refunded { color: var(--muted); }
+  .pill.split { color: var(--violet); border-color: #4a356b; }
+  .ms { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 10px; background: var(--panel2); }
+  .ms .head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .ms .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  input, select { background: var(--panel2); border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 8px 10px; font-size: 14px; width: 100%; }
+  label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+  .row { display: flex; gap: 8px; align-items: end; }
+  .row > * { flex: 1; }
+  .row .narrow { flex: 0 0 120px; }
+  .events { font-size: 13px; }
+  .events div { padding: 6px 0; border-bottom: 1px dashed var(--line); }
+  .events div:last-child { border-bottom: none; }
+  .events code { color: var(--accent); }
+  #toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: #232838; border: 1px solid var(--line); padding: 12px 18px; border-radius: 10px; font-size: 14px; max-width: 90vw; display: none; z-index: 50; box-shadow: 0 8px 30px rgba(0,0,0,0.5); }
+  #toast.error { border-color: var(--danger); }
+  #toast.ok { border-color: var(--accent2); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  code { font-family: ui-monospace, monospace; font-size: 12.5px; }
+  .checklist li { margin-bottom: 8px; }
+  .checklist li.done { color: var(--accent2); }
+  .kv { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; font-size: 14px; }
+  .kv dt { color: var(--muted); }
+  .kv dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .mono { font-family: ui-monospace, monospace; font-size: 12px; word-break: break-all; }
+  footer { border-top: 1px solid var(--line); padding: 20px 0 40px; color: var(--muted); font-size: 13px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="topbar">
+      <div class="logo">Ootle <span>Escrow</span></div>
+      <span class="badge">SIMULATION — NO WALLET, NO REAL FUNDS</span>
+      <div class="spacer"></div>
+      <div class="epochbox">
+        Epoch <b id="epochNow">1000</b>
+        <button id="btnEpoch1" title="Advance one epoch">+1 epoch</button>
+        <button id="btnEpoch10" title="Advance ten epochs">+10</button>
+      </div>
+    </div>
+    <nav>
+      <button data-view="deals" class="active">Deals</button>
+      <button data-view="create">Create deal</button>
+      <button data-view="tour">Guided tour</button>
+      <button data-view="how">How it maps on-chain</button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="card" id="roleCard">
+    <div class="muted" style="margin-bottom:8px">You are signing as — switch roles to play each side of the deal. The template checks the transaction signer for every action, and the simulation enforces the same rules.</div>
+    <div class="roles" id="roles"></div>
+  </section>
+
+  <section id="view-deals"></section>
+  <section id="view-create" style="display:none"></section>
+  <section id="view-tour" style="display:none"></section>
+  <section id="view-how" style="display:none"></section>
+  <section id="view-deal" style="display:none"></section>
+</main>
+
+<footer>
+  <div class="wrap">
+    Ootle Escrow — entry for the Tari November Build Contest (MVP). MIT licensed.
+    The Rust template is tested against the real Ootle engine (<code>cargo test</code> in <code>template/</code>);
+    this page simulates the same rules in your browser so anyone can try the full lifecycle without a wallet.
+    Delivered work is never auto-refunded; the arbiter cannot steal funds — a resolution only splits one disputed milestone.
+    Not audited. Do not lock real funds until the template is published and reviewed.
+    <br><br>
+    <a href="https://github.com/darendrarp/ootle-escrow">Source code on GitHub</a>
+  </div>
+</footer>
+
+<div id="toast"></div>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
